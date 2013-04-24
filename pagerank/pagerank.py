@@ -4,3 +4,21 @@
 
 # 2- 
 
+
+
+# plan:
+
+1) create dictionary mapping {title: DocID}		create dictionary mapping {docID: [link for link in document]}
+
+3) 
+
+
+
+
+
+
+
+
+
+def extractLinks(filename):
+	pass
