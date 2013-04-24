@@ -4,7 +4,7 @@ FULL_NAME: Alberto Pettarin (SUBMITTER)
 CS_LOGIN: pettarin
 EMAIL_ADDRESS: pettarin@cs.brown.edu
 
-FULL_NAME: Olya Ohrimenko (TEAM-MATE)
+FULL_NAME: Alexandra Berke (TEAM-MATE)
 CS_LOGIN: olya
 EMAIL_ADDRESS: olya@cs.brown.edu
 
