@@ -1,11 +1,9 @@
-TEAM_NAME: The Mighty TAs
+TEAM_NAME: Alex and Matt
 
-FULL_NAME: Alberto Pettarin (SUBMITTER)
-CS_LOGIN: pettarin
-EMAIL_ADDRESS: pettarin@cs.brown.edu
+FULL_NAME: Matt Patenaude (SUBMITTER)
+CS_LOGIN: mpatenau
+EMAIL_ADDRESS: mpatenau@cs.brown.edu
 
 FULL_NAME: Alexandra Berke (TEAM-MATE)
-CS_LOGIN: olya
-EMAIL_ADDRESS: olya@cs.brown.edu
-
-PLEASE REMOVE THIS LINE AND, IF YOU WORK ALONE, THE TEAM-MATE PART
+CS_LOGIN: aberke
+EMAIL_ADDRESS: alexandra_berke@brown.edu
