@@ -70,7 +70,7 @@ def main(stopwords_filename, pagesCollection_filename, features_filename, output
 		sum_d = 0
 		for f_i in feature_vector:
 			occ_i = feature_vector[f_i]
-			sum_d += f_i**2
+			sum_d += occ_i**2
 
 		# put entry for pageID in index
 		index[pageID] = (sum_d, feature_vector)
