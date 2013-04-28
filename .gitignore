@@ -1,7 +1,5 @@
 *.py[cod]
 
-*.dat
-
 # C extensions
 *.so
 
@@ -38,4 +36,5 @@ nosetests.xml
 
 # data directory
 data
+*/*.dat
 .DS_Store
