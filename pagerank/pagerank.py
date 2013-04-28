@@ -1,5 +1,5 @@
 # pagerank main file
-
+import sys
 # global variables
 alpha = 0.1
 
@@ -10,15 +10,19 @@ alpha = 0.1
 def main(collection_filename, output_filename):
     # 1) create dictionary mapping title_map: {title: DocID}, dictionary mapping link_map: {docID: set(link for link in document)}, sorted list of docIDs
     (title_map, link_map, id_list) = parse(collection_filename)
+    print('parsed')
     # 2) create adjancy matrix A  as sparse dictionary {(i,j):1 if i links to j where i,j docIDs}
     A = create_adjacency_matrix(title_map, link_map)
+    print('create_adjacency_matrix')
     # 3) create stochastic matrix P, as defined in section 12.2.1 of textbook with damping factor alpha=0.1
     P = create_stochastic_matrix(A, alpha, id_list) # alpha defined as global variable above
+    print('create_stochastic_matrix')
     # create initial vector x with its only 1 in the first entry
     x = {j:0 for j in id_list}
     x[id_list[0]]=1
+    print('now to compute pagerank')
     # now compute pagerank after so many vector-matrix-multiply iterations of x*P
-    pagerank,P_new = compute_pagerank(x,P,id_list,128)
+    (pagerank, P_new) = compute_pagerank(x,P,id_list,128)
     assert(pagerank != x)
     assert(P_new == P)
     # print pagerank to file
@@ -90,6 +94,8 @@ def create_stochastic_matrix(A, alpha, id_list):
     rows = row_count(A, id_list)
     # Augment A as follows:   
     for i in id_list:
+        if i%100 == 0:
+            print('create_stochastic_matrix: computing row '+str(i))
         ones = rows[i]
         if ones == 0:  # 1. If a row of A has no 1's, then replace each element by 1/N. For all other rows proceed as follows.
             for j in id_list:
@@ -196,7 +202,7 @@ def parse(fname):
     f.close()
     return (title_map, link_map, id_list)
 
-
+main(sys.argv[1], sys.argv[2])
 
 
 
