@@ -8,15 +8,13 @@
 
 #include <Python.h>
 
-/* Constants */
-
 /* Handy macros */
 #define LINALGEBRA_MAX(a, b) ((a < b) ? b : a)
 #define LINALGEBRA_MIN(a, b) ((a > b) ? b : a)
 
 
 typedef struct linalgebra_stochastic_row {
-    float nnz_entry;
+    double nnz_entry;
     int nnz_array[];
 } linalgebra_stochastic_row_t;
 

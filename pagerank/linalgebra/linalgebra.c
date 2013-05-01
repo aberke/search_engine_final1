@@ -7,9 +7,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <stdio.h>
-
-
-/* Global variables */
+#include <math.h>   
 
 /* Module method declarations */
 static PyObject *linalgebra_difference_normsq(PyObject *self, PyObject *args);
@@ -36,12 +34,10 @@ input: 1) adjancy matrix A  as dictionary mapping row to list of nnz entries {i:
        3) N:= total number of pageIDs
        4) alpha:= constant in stochastic matrix
 output: row n of stochastic matrix P */
-linalgebra_stochastic_row_t* linalgebra_stochastic_row_init(PyObject *A, PyObject *i, int N, float alpha){
+linalgebra_stochastic_row_t* linalgebra_stochastic_row_init(PyObject *A, PyObject *i, int N, double alpha){
     // extract row n from A
-    printf("want to get item: ");
     PyObject *nnz_listPy = PyDict_GetItem(A, i);
     int n = (int)PyList_Size(nnz_listPy);
-    printf("n:%i\n",n);
 
     linalgebra_stochastic_row_t* row = malloc(sizeof(struct linalgebra_stochastic_row) + (n+1)*sizeof(int));
     // set nnz_entry
@@ -55,24 +51,27 @@ linalgebra_stochastic_row_t* linalgebra_stochastic_row_init(PyObject *A, PyObjec
     return row;
 }
 /******** Helper to linalgebra_compute_pagerank: computes normsq of difference of two input vectors as arrays ******/
-float compute_normsq_diff(float vec1[], float vec2[], int N){
-    float normsq = 0;
+double compute_normsq_diff(double vec1[], double vec2[], int N){
+    double normsq = 0;
     int i;
-    for(i=0; i<N; i++){
-        float v1 = vec1[i];
-        float v2 = vec2[i];
-        printf("v1:%f, v2:%f, diff:%f\n",v1,v2,v1-v2);
+    for(i=0; i<N; i++)
         normsq = normsq + (vec1[i] - vec2[i])*(vec1[i]-vec2[i]);
-    }
     return normsq;
 }
 /******** Helper to linalgebra_compute_pagerank: fills array with all zeros ******/
-void zero_array(float array[], int N){
-    int i=0;
+void zero_array(double array[], int N){
+    int i;
     for(i=0; i<N; i++)
         array[i] = 0;
 }
-
+/******** Helper to linalgebra_compute_pagerank: computes norm of "vector" ******/
+double compute_norm(double vector[], int N){
+    double normsq = 0;
+    int i;
+    for(i=0; i<N; i++)
+        normsq = normsq + vector[i]*vector[i];
+    return sqrt(normsq);
+}
 
 /****************************
             adjancy matrix A  as dictionary mapping row to list of nnz entries {i:[j for j in docIDs if i links to j]}
@@ -92,85 +91,77 @@ void zero_array(float array[], int N){
 static PyObject *linalgebra_compute_pagerank(PyObject *self, PyObject *args){
     /************ unpack arguments ***********/
     PyObject *A = NULL;
-    float alpha = 0;
+    double alpha = 0;
     PyObject *id_listPy = NULL;
     int iterations = 0;
-    if (!PyArg_ParseTuple(args, "OfOi", &A, &alpha, &id_listPy, &iterations))
+    if (!PyArg_ParseTuple(args, "OdOi", &A, &alpha, &id_listPy, &iterations))
         return NULL;
     /************ unpack arguments ***********/
-    printf("arguments unpacked\n");
+    
     /******************************* initialize:  
         int N = total pageIDs
-        float zero_entry:= alpha/N  <-- value of entries that don't appear in sparse representation
+        double zero_entry:= alpha/N  <-- value of entries that don't appear in sparse representation
         int pageIDs[N]:= array of pageIDs
         rows[N]:= array of rows taken from A as array of pointers to linalgebra_stochastic_row_t's
     ***********/
     Py_ssize_t NPy = PyList_Size(id_listPy);
     int N = (int)NPy;
-    float zero_entry = alpha/N;
+    double zero_entry = alpha/N;
     int pageIDs[N];
     linalgebra_stochastic_row_t* rows[N];
     int i,j,k;
     for(i=0; i<N; i++){
         PyObject *row_indexPy = PyList_GetItem(id_listPy, i);
         pageIDs[i] = (int)PyLong_AsLong(row_indexPy);
-        printf("I:%i\n",i);
         rows[i] = linalgebra_stochastic_row_init(A, row_indexPy, N, alpha);
     }
     /************************* initialized: have stochastic matrix as array of rows ***********/
     printf("N:%i, alpha:%f, zero_entry:%f\n",N,alpha,zero_entry);
 
     /************************ Initilize pagerank[N]:= [1,0,0,....,0] ******************/
-    float pagerank[N];
-    float temp[N];
-    zero_array(pagerank,N);
-    // for(i=0; i<N; i++)
-    //     pagerank[i] = 0;
+    double pagerank[N];
+    double temp[N];
+    zero_array(pagerank,N); //zeros out the array of doubles
     pagerank[0] = 1;
     /************************ Initilized pagerank[N]:= [1,0,0,....,0] ******************/
     printf("pagerank initialized\n");
     /************** Compute pagerank*P <iterations> times! *******************/
-    for(k=0; k<4; k++){
+    for(k=0; k<iterations; k++){
         zero_array(temp,N);
         for(i=0; i<N; i++){
             // extract all necessary values for this particular row before looking at column by column
-            float vec_i = pagerank[i];
+            double vec_i = pagerank[i];
             linalgebra_stochastic_row_t* row_i = rows[i];
-            float nnz_entry = row_i->nnz_entry;
+            double nnz_entry = row_i->nnz_entry;
 
             // setup starting variables
             int nnz_index = 0;
             int nnz = (row_i->nnz_array)[0];
-            float value;
+            double value;
 
             for(j=0; j<N; j++){
-                printf("(%i,%i), nnz_index=%i, nnz=%i\n",i,j,nnz_index, nnz);
                 // get value we're multiplying vec_i by
-                if((nnz > j)||(nnz < 0)){ // I put a (-1) at the end of each row's nnz_array to mark the end
+                if((nnz > j)||(nnz < 0)) // I put a (-1) at the end of each row's nnz_array to mark the end
                     value = zero_entry;
-                    //printf("(i,j):(%i,%i): value=zero_entry: %f\n", i, j, value);
-                }
                 else{
                     value = nnz_entry;
                     nnz_index ++;
                     nnz = (row_i->nnz_array)[nnz_index];
-                    printf("(%i,%i): value=nnz_entry: %f\n", i, j, value);
                 }
                 temp[j] = temp[j] + (vec_i*value);
-                printf("(%i,%i): temp[j]=%f\n",i,j,temp[j]);
             }
         }
         // obtained result!
-        printf("iteration %i: normsq(pagerank, temp)= %f\n", k, compute_normsq_diff(pagerank, temp, N));
-        // reset pagerank as result:
-        float sum =0;
+        double norm = compute_norm(temp, N);
+        printf("iteration %i: ***********************\nnormsq(pagerank, temp)= %f\nnorm: %f\n", k, compute_normsq_diff(pagerank, temp, N),norm);
+        // reset pagerank as (normalized) result:
+        double sum = 0;
         for(j=0; j<N; j++){
-            pagerank[j] = temp[j];
+            pagerank[j] = temp[j]/norm; // <-- scaling each entry up by norm -- bad idea?  Definitely not quite honest
             sum = sum + pagerank[j];
         }
-        printf("sums to %f\n",sum);
+        printf("new pagerank entries sum to %f\n",sum);
     }
-    printf("in compute_pagerank, alpha: %f, N: %u, zero_entry: %f\n", alpha, N, zero_entry);
     // free all the rows
     for(i=0; i<N; i++){
         int row_index = pageIDs[i];

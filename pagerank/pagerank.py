@@ -1,7 +1,10 @@
 # pagerank main file
 import sys
+import linalgebra
 # global variables
 alpha = 0.1
+iterations = 128
+
 
 
 # computes pagerank of collection and writes pagerank out to file where the ith line is the ith component of the pagerank vector
@@ -11,10 +14,25 @@ def main(collection_filename, output_filename):
     # 1) create dictionary mapping title_map: {title: DocID}, dictionary mapping link_map: {docID: set(link for link in document)}, sorted list of docIDs
     (title_map, link_map, id_list) = parse(collection_filename)
     print('parsed')
-    # 2) create adjancy matrix A  as sparse dictionary {(i,j):1 if i links to j where i,j docIDs}
+    # 2) create adjancy matrix A  as dictionary mapping row to list of nnz entries {i:[j for j in docIDs if i links to j]}
     A = create_adjacency_matrix(title_map, link_map)
     print('create_adjacency_matrix')
-    # 3) create stochastic matrix P, as defined in section 12.2.1 of textbook with damping factor alpha=0.1
+    pagerank = linalgebra.compute_pagerank(A, alpha, id_list, iterations)
+    print('done with pagerank')
+    # print pagerank to file
+    print_output(output_filename, pagerank, id_list)
+    return
+
+# version that uses python rather than C module
+def main2(collection_filename, output_filename):
+    # 1) create dictionary mapping title_map: {title: DocID}, dictionary mapping link_map: {docID: set(link for link in document)}, sorted list of docIDs
+    (title_map, link_map, id_list) = parse(collection_filename)
+    print('parsed')
+    # 2) create adjancy matrix A  as dictionary mapping row to list of nnz entries {i:[j for j in docIDs if i links to j]}
+    A = create_adjacency_matrix(title_map, link_map)
+    print('create_adjacency_matrix')
+
+    # 3) create stochastic matrix P from A, as defined in section 12.2.1 of textbook with damping factor alpha=0.1
     P = create_stochastic_matrix(A, alpha, id_list) # alpha defined as global variable above
     print('create_stochastic_matrix')
     # create initial vector x with its only 1 in the first entry
@@ -22,12 +40,10 @@ def main(collection_filename, output_filename):
     x[id_list[0]]=1
     print('now to compute pagerank')
     # now compute pagerank after so many vector-matrix-multiply iterations of x*P
-    (pagerank, P_new) = compute_pagerank(x,P,id_list,128)
-    assert(pagerank != x)
-    assert(P_new == P)
+    pagerank = compute_pagerank(x,P, id_list, 128)
     # print pagerank to file
     print_output(output_filename, pagerank, id_list)
-    return (A,P,pagerank)
+    return #(A,P,pagerank)
 
 # input:  1) filename of output file to write to
 #         2) pagerank to represent on file
@@ -39,98 +55,80 @@ def print_output(output_filename, pagerank, id_list):
         f.write(str(pagerank[i])+'\n')
     f.close()
 
+# input:  1) vector x:={pageID: value for pageID in collection}
+#         2) P -- stochastic matrix as dictionary of (non-sparse) row dictionaries {i:{j: P_i_j where i,j pageIDs}}
+#         3) list of pageIDs
+#         4) number of iterations to compute x*P
+# output: pagerank after <iterations> many x=x*P computations
 def compute_pagerank(x,P,id_list,iterations):
     count = 0
-    pagerank = x.copy()
+    pagerank = x
     while count < iterations:
-        new_pagerank = vector_matrix_multiply(pagerank,P,id_list)
-        print('iteration: '+str(count)+', norm of difference: '+str(difference_norm(pagerank, new_pagerank)))
+        new_pagerank = pagerank_P_multiply(pagerank, P, id_list)
+        print('iteration: '+str(count)+', squared norm of difference: '+str(difference_normsq(pagerank, new_pagerank)))
         pagerank = new_pagerank
         count += 1
-    return (pagerank,P)
-
+    return pagerank
 
 # helper for testing -- finds the norm of the difference of two vectors
 # useful because I want to see that this norm decreases as iterations of pagerank vector-matrix-multiply continue -- ie I want to see that result of pagerank is converging
-def difference_norm(vec1, vec2):
-    norm = 0
-    for k in vec1:
-        norm += (vec1[k]-vec2[k])**2
-    return norm
+def difference_normsq(vec1, vec2):
+    return linalgebra.difference_normsq(vec1, vec2)
 
-# input:  1) vector in dictionary form: {key: value for key in keys}
-#         2) matrix in dictionary form: {(key_i, key_j):value for key_i in rows (keys) for key_j in columns (keys)}
-#         3) keys is essentially the domain of both the row and column spaces -- it's the docIDs
-# output: new vector result = vector*matrix
-def vector_matrix_multiply(vector, matrix, keys):
+# returns vector-matrix-multiplication result x*P
+def pagerank_P_multiply(vector, P, keys):
     result = {j:0 for j in keys}
-    for (i,j),val in matrix.items():
-        result[j] += vector[i]*val
+    zero_entry = float(alpha)/len(keys)
+    for i in keys:
+        nnz_entry = P[i]['nnz_entry']
+        nnz_array = P[i]['nnz_array']
+        v_i = vector[i]
+        for j in keys:
+            if j in nnz_array:
+                result[j] += v_i*nnz_entry
+            else:
+                result[j] += v_i*zero_entry
+    print('result:')
+    for j in keys:
+        print('result['+str(j)+']='+str(result[j]))
     return result
 
-
-# helper to create_stochastic_matrix -- creates map rows = {docID: #1's in the row}
-def row_count(A, id_list):
-    rows = {}
-    for docID in id_list:
-        count = 0
-        for (id_i, id_j) in A:
-            if id_i == docID:
-                count += 1
-        rows[docID] = count
-    return rows
-
-# builds stochastic matrix P from adjacency matrix as defined in section 12.2.1 of textbook
-# input:  1) matrix A as sparse dictionary {(i,j):1 if i links to j where i,j docIDs}
+# builds SPARSE stochastic matrix P from adjacency matrix as defined in section 12.2.1 of textbook
+# input:  1) matrix A as dictionary mapping row to list of nnz entries {i:[j for j in docIDs if i links to j]}
 #         2) damping factor alpha
 #         3) sorted list of docIDs id_set
-# output: P -- stochastic matrix
+# output: P -- stochastic matrix as dictionary of sparse row dictionaries {i: {'nnz_entry':((1-alpha)/N + alpha/N), 'nnz_array':A[i]}} 
 def create_stochastic_matrix(A, alpha, id_list):
     # establish variables used throughout procedure
     N = len(id_list) 
-    mew = float(1)/N
-    P = {} # initalize new empty matrix
-    # calculate number of 1's in each row -- create map: rows = {docID: #1's in the row}
-    rows = row_count(A, id_list)
-    # Augment A as follows:   
-    for i in id_list:
-        if i%100 == 0:
-            print('create_stochastic_matrix: computing row '+str(i))
-        ones = rows[i]
-        if ones == 0:  # 1. If a row of A has no 1's, then replace each element by 1/N. For all other rows proceed as follows.
-            for j in id_list:
-                P[(i, j)] = mew
-        else: # 2. Divide each 1 in A by the number of 1's in its row. Thus, if there is a row with three 1's, then each of them is replaced by 1/3.
-            mew_other = float(1)/ones
-            for j in id_list:
-                if (i,j) in A: # want to make sure we leave 0's as 0's
-                    P[(i,j)] = mew_other
-                else:
-                    P[(i,j)] = 0
-    # 3. Multiply resulting matrix by 1-alpha
     beta = 1 - alpha
-    for (i,j) in P:
-        P[(i,j)] = beta*P[(i,j)]
-    #4. Add alpha/N to every entry of the resulting matrix, to obtain P.
-    epsilon = float(alpha)/N
-    for (i,j) in P:
-        P[(i,j)] = epsilon + P[(i,j)]
-    return P
+    epsilon = alpha/N
+    P = {} # dictionary of rows
+    # Augment A into P as follows:  
+            # 1. If a row of A has no 1's, then replace each element by 1/N. For all other rows proceed as follows.
+            # 2. Divide each 1 in A by the number of 1's in its row. Thus, if there is a row with three 1's, then each of them is replaced by 1/3.
+            # 3. Multiply resulting matrix by 1-alpha
+            # 4. Add alpha/N to every entry of the resulting matrix, to obtain P. 
+    for i in id_list: 
+        P[i] = {'nnz_entry':((beta/len(A[i])) + epsilon), 'nnz_array':A[i]}  
+    return P 
 
 
 # builds adjacency matrix A
 # input:  1) title_map: {title: DocID}
 #         2) link_map: {docID: set(link for link in document)}
-# output: matrix A as sparse dictionary {(i,j):1 if i links to j where i,j docIDs}
+# output: matrix A as dictionary mapping row to list of nnz entries {i:[j for j in docIDs if i links to j]}
 def create_adjacency_matrix(title_map, link_map):
-	A = {}
-	for i in link_map:
-		doc_links = link_map[i]
-		for link in doc_links:
-			if link in title_map: # then this is an internal link -- lets put this (i,j) pair in our matrix
-				j = title_map[link]
-				A[(i,j)] = 1
-	return A
+    A = {}
+    for i in link_map:
+        row_i = []
+        doc_links = link_map[i]
+        for link in doc_links:
+            if link in title_map: # then this is an internal link -- lets put this (i,j) pair in our matrix
+                j = title_map[link]
+                row_i.append(j)
+        A[i] = sorted(row_i)
+    return A
 
 # helper to parse
 # input: 1) currline -- line to extract links from
@@ -203,9 +201,3 @@ def parse(fname):
     return (title_map, link_map, id_list)
 
 main(sys.argv[1], sys.argv[2])
-
-
-
-
-
-
