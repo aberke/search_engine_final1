@@ -1,6 +1,7 @@
-# Create the test set for use with svm_classify
+# Create the test set for use with svm_classify. If an optional training.dat file is produced,
+# it limits the test.dat file to contain only pageIDs found in training.dat.
 # Usage:
-#   python create_test_set.py vecrep.dat test.dat
+#   python create_test_set.py vecrep.dat test.dat [training.dat]
 
 import sys, math
 
@@ -33,12 +34,24 @@ def recreate_vecrep(vecrep_filename, normalized_bool):
 def export_test_data(vecrep, output_filename):
 	output = open(output_filename, 'w')
 	
+	# load training data, if necessary
+	pageIDs = set(vecrep.keys())
+	if len(sys.argv) == 4:
+		training = open(sys.argv[3], 'r')
+		pageIDs = set()
+		for line in training:
+			(pageID, c) = line.split()
+			pageID = int(pageID)
+			pageIDs.add(pageID)
+		training.close()
+	
 	for pageID in vecrep:
-		feature_vector = vecrep[pageID]
-		pageString = "0"
-		for feature, val in sorted(feature_vector.items()):
-			pageString += ' '+str(feature + 1)+':'+str(val)
-		output.write(pageString + '\n')
+		if pageID in pageIDs:
+			feature_vector = vecrep[pageID]
+			pageString = "0"
+			for feature, val in sorted(feature_vector.items()):
+				pageString += ' '+str(feature + 1)+':'+str(val)
+			output.write(pageString + '\n')
 	
 	output.close()
 
