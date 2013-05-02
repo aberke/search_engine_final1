@@ -9,7 +9,7 @@ CS_LOGIN: aberke
 EMAIL_ADDRESS: alexandra_berke@brown.edu
 
 SVM_OPTIONS: -m 256
-SVM_EPSILON: 0.1
+SVM_EPSILON: 0.005
 
 # CATEGORY X
 #
